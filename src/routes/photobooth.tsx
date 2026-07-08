@@ -30,12 +30,13 @@ function PhotoboothPage() {
   const [frame, setFrame] = useState<FrameKey>("beige");
   const [stripUrl, setStripUrl] = useState<string | null>(null);
 
-  // Perbaikan 1: Gunakan State agar React langsung merender ulang video saat kamera siap
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  
+
   const channelRef = useRef<any>(null);
   const peerRef = useRef<Peer | null>(null);
+  // Track if we already initiated a call to avoid double-calling
+  const calledRef = useRef(false);
 
   const stopStreams = useCallback(() => {
     localStream?.getTracks().forEach((t) => t.stop());
@@ -59,62 +60,112 @@ function PhotoboothPage() {
     }
   };
 
-  // Logika Koneksi LDR yang lebih kokoh
+  // ── Koneksi WebRTC menggunakan Supabase Presence ──────────────────────────
+  // Presence memastikan kedua pihak saling "terlihat" begitu masuk room,
+  // tidak peduli siapa yang datang lebih dulu.
+  // Penentuan "caller" dilakukan secara deterministik: Peer ID yang lebih
+  // besar (secara string) selalu menjadi caller → tidak ada double-call.
   useEffect(() => {
     if (stage !== "connect" || !localStream) return;
-    if (peerRef.current) return; // Mencegah double koneksi di Strict Mode
+    if (peerRef.current) return; // Prevent double init in Strict Mode
 
     const p = new Peer();
     peerRef.current = p;
-    const channel = supabase.channel('anniversary-room', {
-      config: { broadcast: { self: false } }
-    });
-    channelRef.current = channel;
 
-    p.on('open', (id) => {
-      console.log("My Peer ID:", id);
+    p.on("open", (myId) => {
+      console.log("My Peer ID:", myId);
 
-      // 1. Mendengarkan panggilan masuk dari partner
-      channel.on('broadcast', { event: 'peer-id' }, ({ payload }) => {
-        if (payload.peerId !== id) {
-          console.log("Partner ditemukan! Menghubungkan...");
-          const call = p.call(payload.peerId, localStream);
-          call.on('stream', (remote) => {
+      // Jawab panggilan masuk (kita bisa jadi receiver)
+      p.on("call", (call) => {
+        if (calledRef.current) return; // Tolak duplikat
+        calledRef.current = true;
+        console.log("Menerima panggilan dari partner...");
+        call.answer(localStream);
+        call.on("stream", (remote) => {
+          setRemoteStream(remote);
+          setStage("capture");
+        });
+        call.on("error", (err) => console.error("Call error:", err));
+      });
+
+      // Gunakan Presence agar kedua pihak saling tahu tanpa timing race
+      const channel = supabase.channel("photobooth-room", {
+        config: {
+          presence: { key: myId },
+          broadcast: { self: false },
+        },
+      });
+      channelRef.current = channel;
+
+      // Fungsi untuk mencoba memanggil partner (kita = caller)
+      const tryCall = (partnerIds: string[]) => {
+        // Hanya ada satu partner yang valid (ID berbeda dari kita)
+        const partnerId = partnerIds.find((id) => id !== myId);
+        if (!partnerId) return;
+
+        // Caller deterministik: Peer ID yang lebih besar yang memanggil
+        if (myId > partnerId && !calledRef.current) {
+          calledRef.current = true;
+          console.log("Saya caller. Memanggil partner:", partnerId);
+          const call = p.call(partnerId, localStream);
+          call.on("stream", (remote) => {
             setRemoteStream(remote);
             setStage("capture");
           });
+          call.on("error", (err) => {
+            console.error("Call error:", err);
+            calledRef.current = false; // Izinkan retry
+          });
         }
+        // Partner dengan ID lebih kecil cukup menunggu panggilan masuk (p.on("call"))
+      };
+
+      // Saat partner JOIN ke room (sudah ada kita di sana)
+      channel.on("presence", { event: "join" }, ({ newPresences }) => {
+        const partnerIds = newPresences.map((p: any) => p.presence_ref ?? p.key);
+        console.log("Partner join:", partnerIds);
+        tryCall(partnerIds);
       });
 
-      // 2. Teriakkan ID kita saat berhasil masuk room
-      channel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log("Berhasil masuk room. Menyebar sinyal...");
-          channel.send({ type: 'broadcast', event: 'peer-id', payload: { peerId: id } });
+      // Subscribe → setelah berhasil masuk, cek siapa yang sudah ada di room
+      channel.subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          // Broadcast kehadiran kita ke semua (termasuk yang sudah ada)
+          await channel.track({ peerId: myId });
+
+          // Ambil snapshot Presence untuk melihat siapa yang sudah di sana
+          const state = channel.presenceState();
+          const existingIds = Object.keys(state).filter((id) => id !== myId);
+          if (existingIds.length > 0) {
+            console.log("Ada partner yang sudah di sana:", existingIds);
+            tryCall(existingIds);
+          }
         }
       });
     });
 
-    // 3. Menjawab telepon jika partner memanggil duluan
-    p.on('call', (call) => {
-      console.log("Menerima panggilan dari partner...");
-      call.answer(localStream);
-      call.on('stream', (remote) => {
-        setRemoteStream(remote);
-        setStage("capture");
-      });
-    });
-
+    p.on("error", (err) => console.error("Peer error:", err));
   }, [stage, localStream]);
 
-  // Perbaikan 2: Fungsi Ping Manual jika sinyal otomatis terlewat
+  // Tombol manual ping jika sinyal tertangkap atau Presence telat
   const pingPartner = () => {
-    if (channelRef.current && peerRef.current) {
-      console.log("Ping manual ditekan...");
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'peer-id',
-        payload: { peerId: peerRef.current.id }
+    if (!channelRef.current || !peerRef.current) return;
+    calledRef.current = false; // Reset agar bisa coba lagi
+    const myId = peerRef.current.id;
+    const state = channelRef.current.presenceState();
+    const existingIds = Object.keys(state).filter((id) => id !== myId);
+    console.log("Ping manual. Presence state:", existingIds);
+
+    if (existingIds.length === 0) {
+      // Belum ada partner, paksa track ulang kehadiran kita
+      channelRef.current.track({ peerId: myId });
+    } else {
+      // Partner sudah ada, paksa panggil
+      const partnerId = existingIds[0];
+      const call = peerRef.current.call(partnerId, localStream!);
+      call?.on("stream", (remote) => {
+        setRemoteStream(remote);
+        setStage("capture");
       });
     }
   };
@@ -125,7 +176,7 @@ function PhotoboothPage() {
       <main className="pt-24 pb-16 px-6 max-w-2xl mx-auto w-full flex-grow flex flex-col justify-center">
         {stage === "permission" && <Permission onEnable={enableCamera} />}
         {stage === "denied" && <Denied onRetry={enableCamera} />}
-        
+
         {stage === "connect" && (
           <div className="text-center animate-fade-in flex flex-col items-center">
             <div className="w-20 h-20 rounded-full bg-accent/60 flex items-center justify-center mb-6 animate-pulse">
@@ -133,8 +184,7 @@ function PhotoboothPage() {
             </div>
             <h2 className="serif italic text-3xl mb-2">Waiting for partner...</h2>
             <p className="text-muted-foreground text-sm mb-8">Make sure both of you are on this page.</p>
-            
-            {/* Tombol Backup jika stuck */}
+
             <button onClick={pingPartner} className="btn-secondary flex items-center gap-2 text-sm">
               <BellRing size={16} /> Partner is here? Connect!
             </button>
@@ -157,7 +207,7 @@ function PhotoboothPage() {
         {stage === "frame" && (
           <FrameSelection photos={photos} frame={frame} setFrame={setFrame} onContinue={(url) => { setStripUrl(url); setStage("result"); }} />
         )}
-        
+
         {stage === "result" && stripUrl && (
           <Result stripUrl={stripUrl} onRetake={() => window.location.reload()} />
         )}
@@ -181,13 +231,12 @@ function Capture({
 }) {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  
+
   const [count, setCount] = useState<number | null>(null);
   const [taken, setTaken] = useState<string[]>([]);
   const [flash, setFlash] = useState(false);
   const capturingRef = useRef(false);
 
-  // Pemasangan Stream Video ke Element HTML
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
@@ -225,7 +274,7 @@ function Capture({
     if (capturingRef.current) return;
     capturingRef.current = true;
     const results: string[] = [];
-    
+
     for (let shot = 0; shot < 4; shot++) {
       for (let n = 3; n >= 1; n--) {
         setCount(n);
@@ -234,11 +283,11 @@ function Capture({
       setCount(null);
       setFlash(true);
       await new Promise(r => setTimeout(r, 80));
-      
+
       const img = snap();
       if (img) results.push(img);
       setTaken([...results]);
-      
+
       setFlash(false);
       await new Promise(r => setTimeout(r, 600));
     }
@@ -272,19 +321,18 @@ function Capture({
       </div>
 
       <div className="relative aspect-[3/4] md:aspect-square w-full rounded-3xl overflow-hidden bg-black shadow-xl flex">
-        {/* Tambahan properti autoPlay agar video dipaksa jalan oleh browser */}
-        <video 
-          ref={localVideoRef} 
-          autoPlay 
-          muted 
-          playsInline 
-          className="w-1/2 h-full object-cover [transform:scaleX(-1)] border-r-4 border-background" 
+        <video
+          ref={localVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-1/2 h-full object-cover [transform:scaleX(-1)] border-r-4 border-background"
         />
-        <video 
-          ref={remoteVideoRef} 
-          autoPlay 
-          playsInline 
-          className="w-1/2 h-full object-cover" 
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className="w-1/2 h-full object-cover"
         />
         {count !== null && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
@@ -397,16 +445,16 @@ async function renderStrip(photos: string[], frameKey: FrameKey): Promise<string
   ctx.strokeStyle = cfg.accent + "22"; ctx.lineWidth = 2; ctx.strokeRect(16, 16, W - 32, H - 32);
 
   const imgs = await Promise.all(photos.map(src => new Promise<HTMLImageElement>((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = reject; im.src = src; })));
-  
+
   imgs.forEach((im, i) => {
     const x = pad; const y = pad + i * (cellH + gap);
     const ir = im.width / im.height; const tr = cellW / cellH;
     let sx = 0, sy = 0, sw = im.width, sh = im.height;
     if (ir > tr) { sw = im.height * tr; sx = (im.width - sw) / 2; } else { sh = im.width / tr; sy = (im.height - sh) / 2; }
-    
+
     ctx.drawImage(im, sx, sy, sw, sh, x, y, cellW, cellH);
     ctx.strokeStyle = cfg.accent + "33"; ctx.lineWidth = 1; ctx.strokeRect(x, y, cellW, cellH);
-    
+
     if (frameKey === "doodle") {
       ctx.fillStyle = "#8A4B58"; ctx.beginPath(); const s = 18; const hx = x + cellW - 32; const hy = y + 24;
       ctx.moveTo(hx, hy + s / 4); ctx.bezierCurveTo(hx, hy, hx - s / 2, hy, hx - s / 2, hy + s / 4); ctx.bezierCurveTo(hx - s / 2, hy + s / 2, hx, hy + s * 0.7, hx, hy + s); ctx.bezierCurveTo(hx, hy + s * 0.7, hx + s / 2, hy + s / 2, hx + s / 2, hy + s / 4); ctx.bezierCurveTo(hx + s / 2, hy, hx, hy, hx, hy + s / 4); ctx.fill();
