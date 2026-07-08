@@ -9,8 +9,20 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UsRouteImport } from './routes/us'
+import { Route as TransitionRouteImport } from './routes/transition'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UsRoute = UsRouteImport.update({
+  id: '/us',
+  path: '/us',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TransitionRoute = TransitionRouteImport.update({
+  id: '/transition',
+  path: '/transition',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +31,50 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/transition': typeof TransitionRoute
+  '/us': typeof UsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/transition': typeof TransitionRoute
+  '/us': typeof UsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/transition': typeof TransitionRoute
+  '/us': typeof UsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/transition' | '/us'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/transition' | '/us'
+  id: '__root__' | '/' | '/transition' | '/us'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  TransitionRoute: typeof TransitionRoute
+  UsRoute: typeof UsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/us': {
+      id: '/us'
+      path: '/us'
+      fullPath: '/us'
+      preLoaderRoute: typeof UsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/transition': {
+      id: '/transition'
+      path: '/transition'
+      fullPath: '/transition'
+      preLoaderRoute: typeof TransitionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,17 +87,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  TransitionRoute: TransitionRoute,
+  UsRoute: UsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
