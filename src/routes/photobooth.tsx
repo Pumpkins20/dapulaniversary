@@ -33,19 +33,28 @@ function PhotoboothPage() {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
 
+  // Refs untuk cleanup — agar stopStreams tidak bergantung pada state (yang menyebabkan re-run)
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const channelRef = useRef<any>(null);
   const peerRef = useRef<Peer | null>(null);
-  // Track if we already initiated a call to avoid double-calling
   const calledRef = useRef(false);
 
+  // Sinkronkan state ke ref setiap kali berubah
+  useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
+  useEffect(() => { remoteStreamRef.current = remoteStream; }, [remoteStream]);
+
+  // stopStreams membaca dari ref, bukan state — jadi tidak pernah berubah identitas
   const stopStreams = useCallback(() => {
-    localStream?.getTracks().forEach((t) => t.stop());
-    remoteStream?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    remoteStreamRef.current?.getTracks().forEach((t) => t.stop());
     peerRef.current?.destroy();
     channelRef.current?.unsubscribe();
-  }, [localStream, remoteStream]);
+  }, []);
 
-  useEffect(() => () => stopStreams(), [stopStreams]);
+  // Cleanup HANYA saat unmount (dependency [] kosong karena stopStreams stabil)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => stopStreams(), []);
 
   const enableCamera = async () => {
     try {
