@@ -11,6 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsRouteImport } from './routes/us'
 import { Route as TransitionRouteImport } from './routes/transition'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as PhotoboothRouteImport } from './routes/photobooth'
+import { Route as ClosingRouteImport } from './routes/closing'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UsRoute = UsRouteImport.update({
@@ -23,6 +26,21 @@ const TransitionRoute = TransitionRouteImport.update({
   path: '/transition',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PhotoboothRoute = PhotoboothRouteImport.update({
+  id: '/photobooth',
+  path: '/photobooth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClosingRoute = ClosingRouteImport.update({
+  id: '/closing',
+  path: '/closing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,30 +49,55 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/closing': typeof ClosingRoute
+  '/photobooth': typeof PhotoboothRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/transition': typeof TransitionRoute
   '/us': typeof UsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/closing': typeof ClosingRoute
+  '/photobooth': typeof PhotoboothRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/transition': typeof TransitionRoute
   '/us': typeof UsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/closing': typeof ClosingRoute
+  '/photobooth': typeof PhotoboothRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/transition': typeof TransitionRoute
   '/us': typeof UsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/transition' | '/us'
+  fullPaths:
+    | '/'
+    | '/closing'
+    | '/photobooth'
+    | '/sitemap.xml'
+    | '/transition'
+    | '/us'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/transition' | '/us'
-  id: '__root__' | '/' | '/transition' | '/us'
+  to: '/' | '/closing' | '/photobooth' | '/sitemap.xml' | '/transition' | '/us'
+  id:
+    | '__root__'
+    | '/'
+    | '/closing'
+    | '/photobooth'
+    | '/sitemap.xml'
+    | '/transition'
+    | '/us'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClosingRoute: typeof ClosingRoute
+  PhotoboothRoute: typeof PhotoboothRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   TransitionRoute: typeof TransitionRoute
   UsRoute: typeof UsRoute
 }
@@ -75,6 +118,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TransitionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/photobooth': {
+      id: '/photobooth'
+      path: '/photobooth'
+      fullPath: '/photobooth'
+      preLoaderRoute: typeof PhotoboothRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/closing': {
+      id: '/closing'
+      path: '/closing'
+      fullPath: '/closing'
+      preLoaderRoute: typeof ClosingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +151,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClosingRoute: ClosingRoute,
+  PhotoboothRoute: PhotoboothRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   TransitionRoute: TransitionRoute,
   UsRoute: UsRoute,
 }
