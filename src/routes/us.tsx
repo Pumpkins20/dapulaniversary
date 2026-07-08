@@ -15,36 +15,100 @@ export const Route = createFileRoute("/us")({
 
 const memories = [
   {
-    src: "https://lh3.googleusercontent.com/aida-public/AB6AXuDUaqUz-T7bO3xJgRSHyuLKhcQ0Ae-YlwVuwxhLL6BDmm3gxVTFUxTh9X5YYRp9RlT_5PpUlcOCPlFqh52Nf6jqwZ9dZwf0JAp8I4k9142yxX5K7c5T2JtbUjz1PS2U8D8vOd71C8sjyOYKgLmrkv7eTt8QSZALdD1Yp-1Lb3GwcMb7Hjs644pOkZimMbHKUngVUsEzAeOA1Z5roPX2bcucjZmdWGfp1sW6Jq3h97nPlfPOk7n2pfnQMilpbF-_LJ3qrFnwDFnryMc",
-    caption: "Our first coffee together.",
+    src: "/images/foto 1.jpeg", // Foto bercanda latar merah
+    caption: "Always laughing and being silly with you.",
     rotate: -2,
     col: "md:col-span-5",
     aspect: "aspect-square",
     offset: "",
   },
   {
-    src: "https://lh3.googleusercontent.com/aida-public/AB6AXuAWs2BH3vu7UkEU7Y66TRwpMevd3KZ31rdA0gzjgowgrwrk_-YobKp0T5LifYPd1rHhc4NmWipBrj8tfA2uGUxvppWFVCEn7mtdSofaBEtYVNkMoXkPUGeslPIglI22yFqzeSqnaNWROoR2LZ8Cm4W2AHnalxK8mN_aN44YGvdiyszAc-EbjV3y7V4meM0IU2Ts42fhw7Y-nwZgKZuKovbchF_pZULAiieX-1xiXudW-RZ7sOCFkbvCYL_zD_vqJ8h8oorQ17NqOdY",
-    caption: "That sunset we won't forget.",
+    src: "/images/foto 2.jpeg", // Foto bubur ayam dan es teh
+    caption: "Our Movie Nights dates. And being happy!",
     rotate: 3,
     col: "md:col-span-6 md:col-start-7",
     aspect: "aspect-[4/5]",
     offset: "md:mt-20",
   },
   {
-    src: "https://lh3.googleusercontent.com/aida-public/AB6AXuBbUzb5LUmNOZGyQBNVCUnPka6ofFei-rhDvyqPSK2a806wNmdIVWTQxGxKwp47VXF-BJyTp4oMzAdcCbH749F2qqEomW2rr8-wM3RlZ41cm_f4_XuU5OehbMXb7NuKzArxUO_-hNn85t7A5Yl0mfV_sEvdebI75DCnLm1zPFgRO2REJa12mBph7M6bw9WIljp0b7pDW4694xTSJ0QqRGioiZKjCvs168XW34rKdYw9xHYX0sKAeCAGtNMqoUsTPaMM1CNB-Af0VSU",
-    caption: "Writing our story.",
+    src: "/images/foto 3.jpeg", // Foto selfie di luar ruangan
+    caption: "Our photobooth moments for the memories.",
     rotate: -1,
     col: "md:col-span-7 md:col-start-2",
     aspect: "aspect-[16/10]",
     offset: "md:mt-8",
   },
   {
-    src: "https://lh3.googleusercontent.com/aida-public/AB6AXuA3qB-WggunOTHFWv9P-5TBOpmuD8yd2SCo4x6nD-S0rOMyP9t6zkuyDbxjcypy8SJqSr9bOc3u8fbkzpmIh43e3GGHOwNrrV0tozHucUPraylH4UbJKRNzws9WKELRAaxNSBsTayQl1jC3Lx0MZ_yuKBuVhtAFA_T9iBhjTX8KV86F1s1V8TZ5hqV5HiNdwoEDv3r8BS6lHKIJxOTvjEVgWHNNt7awCnKzmKVB1waUzQaIBVrdaIE9BwFZc0HQ_gYV-F8u6swqFvo",
-    caption: "The laugh-until-sunset kind of day.",
+    src: "/images/foto 4.jpeg", // Foto selfie di bioskop
+    caption: "Get our breakfast together.",
     rotate: 4,
     col: "md:col-span-4 md:col-start-9",
     aspect: "aspect-square",
     offset: "md:-mt-12",
+  },
+  {
+    src: "/images/foto 5.jpeg",
+    caption: "More culinary adventures together. And lampion at night",
+    rotate: -3,
+    col: "md:col-span-6 md:col-start-1", 
+    aspect: "aspect-[4/5]",
+    offset: "md:mt-16",
+  },
+  {
+    src: "/images/foto 6.jpeg",
+    caption: "Take our cuties of Black Pink Hat!.",
+    rotate: 2,
+    col: "md:col-span-5 md:col-start-8",
+    aspect: "aspect-square",
+    offset: "md:mt-32",
+  },
+  {
+    src: "/images/foto 7.jpeg",
+    caption: "Fireworks and You in the New Year!.",
+    rotate: -2,
+    col: "md:col-span-7 md:col-start-2",
+    aspect: "aspect-[16/10]",
+    offset: "md:mt-12",
+  },
+  {
+    src: "/images/foto 8.jpeg",
+    caption: "Celebrate Your Birthday!.",
+    rotate: 3,
+    col: "md:col-span-4 md:col-start-9",
+    aspect: "aspect-[4/5]",
+    offset: "md:-mt-10",
+  },
+  {
+    src: "/images/foto 9.jpeg",
+    caption: "So many laughs and endless stories.",
+    rotate: -4,
+    col: "md:col-span-5 md:col-start-1",
+    aspect: "aspect-square",
+    offset: "md:mt-24",
+  },
+  {
+    src: "/images/foto 11.jpeg",
+    caption: "Creating our own little world.",
+    rotate: 2,
+    col: "md:col-span-6 md:col-start-7",
+    aspect: "aspect-[4/5]",
+    offset: "md:mt-10",
+  },
+  {
+    src: "/images/foto 10.jpeg",
+    caption: "A quiet moment amidst the chaos.",
+    rotate: -1,
+    col: "md:col-span-7 md:col-start-3",
+    aspect: "aspect-[16/10]",
+    offset: "md:mt-16",
+  },
+  {
+    src: "/images/foto 12.jpeg",
+    caption: "To many more years together, Epul.",
+    rotate: 4,
+    col: "md:col-span-5 md:col-start-8",
+    aspect: "aspect-square",
+    offset: "md:-mt-8",
   },
 ];
 
