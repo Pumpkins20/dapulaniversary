@@ -4,7 +4,7 @@ import { Heart } from "lucide-react";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "For Epul — Begin Our Journey" },
+      { title: "Photoboth - Anyversary" },
       { name: "description", content: "Another year together. Thank you for being my favorite person." },
     ],
   }),
