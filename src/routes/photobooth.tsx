@@ -61,10 +61,9 @@ function PhotoboothPage() {
   };
 
   // ── Koneksi WebRTC menggunakan Supabase Presence ──────────────────────────
-  // Presence memastikan kedua pihak saling "terlihat" begitu masuk room,
-  // tidak peduli siapa yang datang lebih dulu.
-  // Penentuan "caller" dilakukan secara deterministik: Peer ID yang lebih
-  // besar (secara string) selalu menjadi caller → tidak ada double-call.
+  // Model: siapapun yang JOIN KE ROOM SAAT SUDAH ADA PARTNER → dia yang memanggil.
+  // Siapa yang datang lebih dulu → menunggu p.on("call").
+  // Presence menyimpan { peerId } sebagai metadata yang bisa dibaca semua orang.
   useEffect(() => {
     if (stage !== "connect" || !localStream) return;
     if (peerRef.current) return; // Prevent double init in Strict Mode
@@ -75,71 +74,80 @@ function PhotoboothPage() {
     p.on("open", (myId) => {
       console.log("My Peer ID:", myId);
 
-      // Jawab panggilan masuk (kita bisa jadi receiver)
-      p.on("call", (call) => {
-        if (calledRef.current) return; // Tolak duplikat
+      // ── Selalu siap menerima panggilan (kita bisa jadi receiver) ──
+      p.on("call", (incomingCall) => {
+        if (calledRef.current) return;
         calledRef.current = true;
-        console.log("Menerima panggilan dari partner...");
-        call.answer(localStream);
-        call.on("stream", (remote) => {
+        console.log("Menerima panggilan masuk...");
+        incomingCall.answer(localStream);
+        incomingCall.on("stream", (remote) => {
           setRemoteStream(remote);
           setStage("capture");
         });
-        call.on("error", (err) => console.error("Call error:", err));
+        incomingCall.on("error", (err) => console.error("Incoming call error:", err));
       });
 
-      // Gunakan Presence agar kedua pihak saling tahu tanpa timing race
+      // ── Fungsi memanggil partner berdasarkan peerId yang kita dapat dari Presence ──
+      const callPartner = (partnerId: string) => {
+        if (calledRef.current || partnerId === myId) return;
+        calledRef.current = true;
+        console.log("Saya caller. Menghubungi:", partnerId);
+        const outCall = p.call(partnerId, localStream);
+        if (!outCall) { calledRef.current = false; return; }
+        outCall.on("stream", (remote) => {
+          setRemoteStream(remote);
+          setStage("capture");
+        });
+        outCall.on("error", (err) => {
+          console.error("Outgoing call error:", err);
+          calledRef.current = false;
+        });
+      };
+
+      // ── Ambil semua peerId dari presenceState (format: { [presenceKey]: [{peerId, ...}] }) ──
+      const extractPeerIds = (state: Record<string, any[]>): string[] =>
+        Object.values(state)
+          .flat()
+          .map((p: any) => p.peerId)
+          .filter((id): id is string => !!id && id !== myId);
+
+      // ── Setup channel Presence ──
       const channel = supabase.channel("photobooth-room", {
-        config: {
-          presence: { key: myId },
-          broadcast: { self: false },
-        },
+        config: { presence: { key: myId } },
       });
       channelRef.current = channel;
 
-      // Fungsi untuk mencoba memanggil partner (kita = caller)
-      const tryCall = (partnerIds: string[]) => {
-        // Hanya ada satu partner yang valid (ID berbeda dari kita)
-        const partnerId = partnerIds.find((id) => id !== myId);
-        if (!partnerId) return;
-
-        // Caller deterministik: Peer ID yang lebih besar yang memanggil
-        if (myId > partnerId && !calledRef.current) {
-          calledRef.current = true;
-          console.log("Saya caller. Memanggil partner:", partnerId);
-          const call = p.call(partnerId, localStream);
-          call.on("stream", (remote) => {
-            setRemoteStream(remote);
-            setStage("capture");
-          });
-          call.on("error", (err) => {
-            console.error("Call error:", err);
-            calledRef.current = false; // Izinkan retry
-          });
+      // Saat ada partner JOIN setelah kita (kita yang sudah ada → tidak panggil)
+      // Saat kita JOIN setelah partner (kita yang baru → kita panggil)
+      // Event "join" terpanggil untuk SEMUA join, termasuk diri sendiri.
+      // Kita hanya panggil jika presenceState sudah punya orang lain.
+      channel.on("presence", { event: "join" }, () => {
+        const state = channel.presenceState();
+        const partnerIds = extractPeerIds(state);
+        console.log("Presence join event. Partner ditemukan:", partnerIds);
+        // Siapapun yang JOIN saat partner sudah ada → dia yang panggil.
+        // Gunakan myId > partnerIds[0] sebagai tiebreaker deterministik
+        // supaya tidak double-call jika kedua join hampir bersamaan.
+        if (partnerIds.length > 0 && myId > partnerIds[0]) {
+          callPartner(partnerIds[0]);
         }
-        // Partner dengan ID lebih kecil cukup menunggu panggilan masuk (p.on("call"))
-      };
-
-      // Saat partner JOIN ke room (sudah ada kita di sana)
-      channel.on("presence", { event: "join" }, ({ newPresences }) => {
-        const partnerIds = newPresences.map((p: any) => p.presence_ref ?? p.key);
-        console.log("Partner join:", partnerIds);
-        tryCall(partnerIds);
       });
 
-      // Subscribe → setelah berhasil masuk, cek siapa yang sudah ada di room
+      // Subscribe + track kehadiran kita
       channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          // Broadcast kehadiran kita ke semua (termasuk yang sudah ada)
           await channel.track({ peerId: myId });
 
-          // Ambil snapshot Presence untuk melihat siapa yang sudah di sana
-          const state = channel.presenceState();
-          const existingIds = Object.keys(state).filter((id) => id !== myId);
-          if (existingIds.length > 0) {
-            console.log("Ada partner yang sudah di sana:", existingIds);
-            tryCall(existingIds);
-          }
+          // Cek langsung: siapa yang sudah ada sebelum kita subscribe?
+          // (Presence state langsung tersedia setelah track)
+          setTimeout(() => {
+            const state = channel.presenceState();
+            const partnerIds = extractPeerIds(state);
+            console.log("Cek awal setelah subscribe. Partner:", partnerIds);
+            if (partnerIds.length > 0 && myId > partnerIds[0]) {
+              callPartner(partnerIds[0]);
+            }
+          }, 500); // Tunggu sebentar agar track tersinkron
         }
       });
     });
@@ -147,23 +155,28 @@ function PhotoboothPage() {
     p.on("error", (err) => console.error("Peer error:", err));
   }, [stage, localStream]);
 
-  // Tombol manual ping jika sinyal tertangkap atau Presence telat
+  // ── Tombol manual: paksa panggil partner yang sudah ada di Presence ──
   const pingPartner = () => {
-    if (!channelRef.current || !peerRef.current) return;
-    calledRef.current = false; // Reset agar bisa coba lagi
+    if (!channelRef.current || !peerRef.current || !localStream) return;
     const myId = peerRef.current.id;
     const state = channelRef.current.presenceState();
-    const existingIds = Object.keys(state).filter((id) => id !== myId);
-    console.log("Ping manual. Presence state:", existingIds);
+    const partnerIds = Object.values(state)
+      .flat()
+      .map((p: any) => p.peerId)
+      .filter((id): id is string => !!id && id !== myId);
 
-    if (existingIds.length === 0) {
-      // Belum ada partner, paksa track ulang kehadiran kita
+    console.log("Ping manual. Partner di Presence:", partnerIds);
+
+    if (partnerIds.length === 0) {
+      // Belum ada partner, perbarui track kita
       channelRef.current.track({ peerId: myId });
+      console.log("Belum ada partner, memperbaharui track...");
     } else {
-      // Partner sudah ada, paksa panggil
-      const partnerId = existingIds[0];
-      const call = peerRef.current.call(partnerId, localStream!);
-      call?.on("stream", (remote) => {
+      // Ada partner → paksa panggil, abaikan calledRef
+      calledRef.current = false;
+      const partnerId = partnerIds[0];
+      const outCall = peerRef.current.call(partnerId, localStream);
+      outCall?.on("stream", (remote) => {
         setRemoteStream(remote);
         setStage("capture");
       });
